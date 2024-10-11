@@ -12,7 +12,7 @@ struct ContentView: View {
     // MARK: Instancia de LocationManager
     var locationManager = LocationManager()
     
-    // MARK: Propiedades
+    // MARK: Variable para guardar la ubicación actual del usuario
     @State var coordinateLocation: CLLocationCoordinate2D?
     
     // MARK: Posición de la cámara del mapa
@@ -28,56 +28,85 @@ struct ContentView: View {
            }
        }
     
+    @State private var presentAlert = false
+    @State private var messageAlert = "Error"
+    
     // MARK: Body
     var body: some View {
         VStack {
+            // Mapa para visualizar la ubicación del Usuario
+            /*Map(coordinateRegion: $mapRegion, showsUserLocation: true,userTrackingMode: .constant(.follow))
+                            .edgesIgnoringSafeArea(.all)*/
+            
             //ios 17+
             /*Map(position: $position) {
                 UserAnnotation()
             }
             .clipShape(RoundedRectangle(cornerRadius: 15))*/
-            
-            /*Map(coordinateRegion: $mapRegion, showsUserLocation: true,userTrackingMode: .constant(.follow))
-                            .edgesIgnoringSafeArea(.all)*/
-            
+                        
             Text("Latitud: \(self.coordinateLocation?.latitude ?? 0.0)")
                 .foregroundColor(.secondary)
             
             Text("Longitud: \(self.coordinateLocation?.longitude ?? 0.0)")
                 .foregroundColor(.secondary)
 
-            
             Button {
-                locationManager.obtenerUbicacionUsuario(precisa: true, propourseMessage: "cualquier cosa") { success, location, error_code, message in
+                locationManager.obtenerUbicacionUsuario(precisa: true, propourseMessage: "Mensaje") { success, location, error_code, message in
                     if success {
+                        presentAlert = false
+                        // Actualizar la posición de la cámara del mapa para centrarla alrededor de la ubicación del usuario
+                        
                         coordinateLocation = location
                         
-                        // Update the camera position of the map to center around the user location
                         let regionSpan = MKCoordinateSpan(latitudeDelta: 0.125, longitudeDelta: 0.125)
                         mapRegion = MKCoordinateRegion(center: coordinateLocation!, span: regionSpan)
                         
                         //ios 17+
                         //self.position = .region(MKCoordinateRegion(center: coordinateLocation!, span: regionSpan))
-                        print("Nuevo metodo: \(String(describing: self.coordinateLocation) )")
+                    }else{
+                        // Ocurrió un error al obtener la ubicación del usuario
+                        locationManager.checkAuthorization { success in
+                            if success == false {
+                                presentAlert = true
+                            }else{
+                                presentAlert = false
+                            }
+                        }
                     }
                 }
             } label: {
-                Text("Get Location")
+                Text("Obtener Ubicación")
             }
-                .padding()
+            .alert(
+                "Ubicación no disponible",
+                isPresented: $presentAlert,
+                presenting: messageAlert
+            ) { messageAlert in
+                
+                Button("Ir a Configuración") {
+                    locationManager.abrirConfiguracion()
+                }
+                
+                Button(role: .cancel) {
+                    // Manejo de la cancelación.
+                } label: {
+                    Text("Cancelar")
+                }
+            } message: { messageAlert in
+                // Se puede usar el mensaje de error que viene del metodo de obtenerUbicacionUsuario de la siguiente manera: Text(messageAlert)
+                Text("Tu ubicación actual no se puede determinar en este momento."
+                     + " Puedes abrir la configuración de la app para permitir el acceso a la ubicación.")
+            }
+            .padding()
 
             Button {
                 locationManager.abrirConfiguracion()
             } label: {
-                Text("Settings")
+                Text("Configuración")
             }
             
         }
         .padding()
-        .task {
-            // Comprueba si la aplicación está autorizada para acceder a los servicios de ubicación del dispositivo
-            locationManager.checkAuthorization()
-        }
     }
 }
 

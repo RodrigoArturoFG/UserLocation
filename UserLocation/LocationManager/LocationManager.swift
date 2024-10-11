@@ -16,16 +16,27 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     override init() {
         super.init()
         locationManager.delegate = self
+        self.requestAuthorization()
     }
     
-    //MARK: Solicitar autorización para acceder a la ubicación del usuario
-    func checkAuthorization() {
+    //MARK: Solicitar la autorización para acceder a la ubicación del usuario
+    func requestAuthorization()  {
         switch locationManager.authorizationStatus {
         case .notDetermined:
-            //locationManager.requestWhenInUseAuthorization()
-            locationManager.requestAlwaysAuthorization()
+            locationManager.requestWhenInUseAuthorization()
         default:
             return
+        }
+    }
+    
+    //MARK: Comprueba si la aplicación está autorizada para acceder a los servicios de ubicación del dispositivo
+    func checkAuthorization(completionHandler:@escaping (_ success:Bool) -> Void)  {
+        switch locationManager.authorizationStatus {
+        case .denied:
+            print("Si el usuario seleccionó la opción nunca, se debe solicitar dicho permiso.")
+            completionHandler(false)
+        default:
+            completionHandler(true)
         }
     }
     
@@ -36,9 +47,8 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     var currentLocation: CLLocation {
         get async throws {
             return try await withCheckedThrowingContinuation { continuation in
-                // 1. Set up the continuation object
                 self.continuation = continuation
-                // 2. Triggers the update of the current location
+                // Dispara la actualización de la ubicación actual
                 locationManager.requestLocation()
             }
         }
@@ -46,22 +56,22 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     
     // MARK: Obtener la ubicación actual del usuario si está disponible
     func obtenerUbicacionUsuario(precisa:Bool, propourseMessage:String, completionHandler:@escaping (_ success:Bool, _ location:CLLocationCoordinate2D?, _ error_code: Int, _ message:String?) -> Void) {
-
         Task {
             var location: CLLocation?
             do {
-                // Get the current location from the location manager
+                // Se obtiene la ubicación actual
                 location = try await self.currentLocation
                 
+                // Se asignan los valores correspondientes de la ubicación actual a un objeto de tipo CLLocationCoordinate2D
                 let locationCoordinate = CLLocationCoordinate2D(
                     latitude: location!.coordinate.latitude,
                     longitude: location!.coordinate.longitude
                 )
                 
-                completionHandler(true, locationCoordinate, 0, "cualquier cosa")
+                completionHandler(true, locationCoordinate, 0, "Ubicación actual del usuario")
             } catch {
-                print("Could not get user location: \(error.localizedDescription)")
-                completionHandler(true, nil, 0, "Could not get user location: \(error.localizedDescription)")
+                print("No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
+                completionHandler(false, nil, 0, "No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
             }
         }
 
@@ -73,12 +83,12 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
             UIApplication.shared.open(url)
         }
     }
-    
+        
     // MARK: CLLocationManager Delegates
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        // 4. If there is a location available
+        // Si hay una ubicación disponible
         if let lastLocation = locations.last {
-            // 5. Resumes the continuation object with the user location as result
+            // Reanuda el objeto de continuación con la ubicación del usuario como resultado.
             continuation?.resume(returning: lastLocation)
             // Resets the continuation object
             continuation = nil
@@ -86,10 +96,26 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        // 6. If not possible to retrieve a location, resumes with an error
+        // Si no es posible recuperar una ubicación, el objeto de continuación se resume con un error
         continuation?.resume(throwing: error)
-        // Resets the continuation object
+        // Se resetea el objeto de continuación
         continuation = nil
+    }
+    
+    //MARK:  También podemos recuperar la información de ubicación del usuario cuando la aplicación está segundo plano. Para obtener la autorización "Siempre", primero se debe solicitar el permiso "Al usar la app" y luego solicitar la autorización "Siempre". Para esto usaremos el metodo delegado para saber que opción eligió el usuario //
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            print("El usuario aún no ha hecho una elección con respecto a la ubicación de esta aplicación.")
+            // Cuando el usuario selecciona la opción "Preguntar la próxima vez o al compartirla" desde las configuraciones SI SE SOLICITA la autorización "Al usar la app"
+            locationManager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse:
+            print("El usuario ha otorgado autorización para usar su ubicación solo mientras usa su aplicación.")
+            // Por alguna razón el sistema NO SE SOLICITA la aturización "Siempre" cuando se selecciona "Al usar la app" desde las configuraciones y se regresa a la app.
+            locationManager.requestAlwaysAuthorization()
+        default:
+            return
+        }
     }
     
 }
