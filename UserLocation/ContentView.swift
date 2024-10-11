@@ -28,9 +28,12 @@ struct ContentView: View {
            }
        }
     
-    @State private var presentAlert = false
-    @State private var messageAlert = "Error"
+    @State private var presentAutorizationAlert = false
+    @State private var messageAutorizationAlert = "Error"
     
+    @State private var presentAccuracyAlert = false
+    @State private var messageAccuracyAlert = "Error"
+
     // MARK: Body
     var body: some View {
         VStack {
@@ -53,9 +56,9 @@ struct ContentView: View {
             Button {
                 locationManager.obtenerUbicacionUsuario(precisa: true, propourseMessage: "Mensaje") { success, location, error_code, message in
                     if success {
-                        presentAlert = false
-                        // Actualizar la posición de la cámara del mapa para centrarla alrededor de la ubicación del usuario
+                        presentAutorizationAlert = false
                         
+                        // Actualizar la posición de la cámara del mapa para centrarla alrededor de la ubicación del usuario
                         coordinateLocation = location
                         
                         let regionSpan = MKCoordinateSpan(latitudeDelta: 0.125, longitudeDelta: 0.125)
@@ -64,14 +67,25 @@ struct ContentView: View {
                         //ios 17+
                         //self.position = .region(MKCoordinateRegion(center: coordinateLocation!, span: regionSpan))
                     }else{
-                        // Ocurrió un error al obtener la ubicación del usuario
-                        locationManager.checkAuthorization { success in
-                            if success == false {
-                                presentAlert = true
-                            }else{
-                                presentAlert = false
+                        
+                        switch error_code {
+                        case LocationManagerErorr.obtenerUbicacion.rawValue:
+                            locationManager.checkAuthorization { success, error_code  in
+                                if success == false {
+                                    presentAutorizationAlert = true
+                                    messageAutorizationAlert = message ?? "Tu ubicación actual no se puede determinar en este momento."
+                                }else{
+                                    presentAutorizationAlert = false
+                                    //ocurrió otro error
+                                }
                             }
+                        case LocationManagerErorr.locationReducedAccuracy.rawValue:
+                            presentAccuracyAlert = true
+                            messageAccuracyAlert = "Tu ubicación actual no se puede determinar en este momento."
+                        default:
+                            return
                         }
+
                     }
                 }
             } label: {
@@ -79,9 +93,9 @@ struct ContentView: View {
             }
             .alert(
                 "Ubicación no disponible",
-                isPresented: $presentAlert,
-                presenting: messageAlert
-            ) { messageAlert in
+                isPresented: $presentAutorizationAlert,
+                presenting: messageAutorizationAlert // cambiar por el codigo de error
+            ) { messageAutorizationAlert in
                 
                 Button("Ir a Configuración") {
                     locationManager.abrirConfiguracion()
@@ -92,10 +106,27 @@ struct ContentView: View {
                 } label: {
                     Text("Cancelar")
                 }
-            } message: { messageAlert in
+            } message: { messageAutorizationAlert in
                 // Se puede usar el mensaje de error que viene del metodo de obtenerUbicacionUsuario de la siguiente manera: Text(messageAlert)
                 Text("Tu ubicación actual no se puede determinar en este momento."
                      + " Puedes abrir la configuración de la app para permitir el acceso a la ubicación.")
+            }
+            .alert(
+                "Precisión Reducida",
+                isPresented: $presentAccuracyAlert,
+                presenting: messageAccuracyAlert // cambiar por el codigo de error
+            ) { messageAccuracyAlert in
+                
+                Button("OK") {
+                    presentAccuracyAlert = false
+                    //locationManager.abrirConfiguracion()
+                    locationManager.requestAccuracy { success, error_code in
+                        // manejo de la solicitud
+                    }
+                }
+            } message: { messageAccuracyAlert in
+                // Se puede usar el mensaje de error que viene del metodo de obtenerUbicacionUsuario de la siguiente manera: Text(messageAlert)
+                Text("Para hacer uso de esta funcionalidad la app requiere hacer uso de tu ubicación precisa.")
             }
             .padding()
 
