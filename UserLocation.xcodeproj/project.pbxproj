@@ -288,6 +288,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UserLocation/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Para buscar ubicaciones cercanas, permite que la App detecte tu ubicación.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Para buscar ubicaciones cercanas, permite que la App detecte tu ubicación.";
@@ -320,6 +321,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UserLocation/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Para buscar ubicaciones cercanas, permite que la App detecte tu ubicación.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Para buscar ubicaciones cercanas, permite que la App detecte tu ubicación.";

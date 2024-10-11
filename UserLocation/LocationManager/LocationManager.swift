@@ -7,6 +7,17 @@
 import UIKit
 import CoreLocation
 
+enum LocationManagerErorr: Int, Error {
+    case locationAuthDenied = 1
+    case locationReducedAccuracy = 2
+    case obtenerUbicacion = 3
+    case unknownError
+    
+    init(value: Int) {
+        self = LocationManagerErorr(rawValue: value) ?? .unknownError
+    }
+}
+
 class LocationManager: NSObject, CLLocationManagerDelegate {
     
     //MARK: Objeto para acceder a los servicios de localización
@@ -16,18 +27,53 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     override init() {
         super.init()
         locationManager.delegate = self
+        self.requestAuthorization()
+        /*
+        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.showsBackgroundLocationIndicator = true
+        */
     }
     
-    //MARK: Solicitar autorización para acceder a la ubicación del usuario
-    func checkAuthorization() {
+    //MARK: Solicitar la autorización para acceder a la ubicación del usuario
+    func requestAuthorization()  {
         switch locationManager.authorizationStatus {
         case .notDetermined:
-            //locationManager.requestWhenInUseAuthorization()
-            locationManager.requestAlwaysAuthorization()
+            locationManager.requestWhenInUseAuthorization()
         default:
             return
         }
     }
+    
+    //MARK: Comprueba si la aplicación está autorizada para acceder a los servicios de ubicación del dispositivo
+    func checkAuthorization(completionHandler:@escaping (_ success:Bool, _ error_code: Int) -> Void)  {
+        switch locationManager.authorizationStatus {
+        case .denied:
+            print("Si el usuario seleccionó la opción nunca, se debe solicitar dicho permiso.")
+            completionHandler(false, LocationManagerErorr.locationAuthDenied.rawValue)
+        default:
+            completionHandler(true, 0)
+        }
+    }
+    
+    //MARK: Comprueba el nivel de precisión de la ubicación que la aplicación tiene permiso para usar.
+    func checkAccuracy(completionHandler:@escaping (_ success:Bool, _ error_code: Int) -> Void)  {
+        switch locationManager.accuracyAuthorization {
+        case .reducedAccuracy:
+            print("Si el usuario ha optado por otorgar a esta aplicación acceso a información de ubicación con precisión reducida, entonces se debe requerir al usuario la ubicación precisa de maner obligatoria.")
+            completionHandler(false, LocationManagerErorr.locationReducedAccuracy.rawValue)
+        default:
+            completionHandler(true, 0)
+        }
+    }
+    
+    func requestAccuracy(completionHandler:@escaping (_ success:Bool, _ error_code: Int) -> Void)  {
+        Task{
+            locationManager.requestTemporaryFullAccuracyAuthorization(withPurposeKey: "rastreo", completion: { (error) in
+                print("error -> \(error.debugDescription)")
+            })
+        }
+    }
+
     
     //MARK: Objeto de continuación que devolverá la ubicación del usuario una vez que esté disponible
     private var continuation: CheckedContinuation<CLLocation, Error>?
@@ -36,9 +82,8 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     var currentLocation: CLLocation {
         get async throws {
             return try await withCheckedThrowingContinuation { continuation in
-                // 1. Set up the continuation object
                 self.continuation = continuation
-                // 2. Triggers the update of the current location
+                // Dispara la actualización de la ubicación actual
                 locationManager.requestLocation()
             }
         }
@@ -46,25 +91,56 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     
     // MARK: Obtener la ubicación actual del usuario si está disponible
     func obtenerUbicacionUsuario(precisa:Bool, propourseMessage:String, completionHandler:@escaping (_ success:Bool, _ location:CLLocationCoordinate2D?, _ error_code: Int, _ message:String?) -> Void) {
-
-        Task {
-            var location: CLLocation?
-            do {
-                // Get the current location from the location manager
-                location = try await self.currentLocation
-                
-                let locationCoordinate = CLLocationCoordinate2D(
-                    latitude: location!.coordinate.latitude,
-                    longitude: location!.coordinate.longitude
-                )
-                
-                completionHandler(true, locationCoordinate, 0, "cualquier cosa")
-            } catch {
-                print("Could not get user location: \(error.localizedDescription)")
-                completionHandler(true, nil, 0, "Could not get user location: \(error.localizedDescription)")
+        
+        if(precisa)
+        {
+            Task {
+                self.checkAccuracy { success, error_code in
+                    if success == false {
+                        //obtener accuracyAuthorization si no tiene fullAccuracy solicitarla al usuario
+                        completionHandler(false, nil, LocationManagerErorr.locationReducedAccuracy.rawValue, "Para hacer uso de esta funcionalidad la app requiere hacer uso de tu ubicación precisa.")//por el momento regresar esto
+                    }else{
+                        Task {
+                            var location: CLLocation?
+                            do {
+                                // Se obtiene la ubicación actual
+                                location = try await self.currentLocation
+                                
+                                // Se asignan los valores correspondientes de la ubicación actual a un objeto de tipo CLLocationCoordinate2D
+                                let locationCoordinate = CLLocationCoordinate2D(
+                                    latitude: location!.coordinate.latitude,
+                                    longitude: location!.coordinate.longitude
+                                )
+                                
+                                completionHandler(true, locationCoordinate, 0, "Ubicación actual del usuario")
+                            } catch {
+                                print("No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
+                                completionHandler(false, nil, LocationManagerErorr.obtenerUbicacion.rawValue, "No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+                }
+            }
+        }else{
+            Task {
+                var location: CLLocation?
+                do {
+                    // Se obtiene la ubicación actual
+                    location = try await self.currentLocation
+                    
+                    // Se asignan los valores correspondientes de la ubicación actual a un objeto de tipo CLLocationCoordinate2D
+                    let locationCoordinate = CLLocationCoordinate2D(
+                        latitude: location!.coordinate.latitude,
+                        longitude: location!.coordinate.longitude
+                    )
+                    
+                    completionHandler(true, locationCoordinate, 0, "Ubicación actual del usuario")
+                } catch {
+                    print("No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
+                    completionHandler(false, nil, LocationManagerErorr.obtenerUbicacion.rawValue, "No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
+                }
             }
         }
-
     }
     
     // MARK: Ir a la configuración de la app
@@ -73,12 +149,14 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
             UIApplication.shared.open(url)
         }
     }
-    
+        
     // MARK: CLLocationManager Delegates
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        // 4. If there is a location available
+        // Si hay una ubicación disponible
+        // Check if Requests the one-time delivery of the user’s current location or
+        // Starts the generation of updates that report the user’s current location
         if let lastLocation = locations.last {
-            // 5. Resumes the continuation object with the user location as result
+            // Reanuda el objeto de continuación con la ubicación del usuario como resultado.
             continuation?.resume(returning: lastLocation)
             // Resets the continuation object
             continuation = nil
@@ -86,10 +164,26 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        // 6. If not possible to retrieve a location, resumes with an error
+        // Si no es posible recuperar una ubicación, el objeto de continuación se resume con un error
         continuation?.resume(throwing: error)
-        // Resets the continuation object
+        // Se resetea el objeto de continuación
         continuation = nil
+    }
+    
+    //MARK:  También podemos recuperar la información de ubicación del usuario cuando la aplicación está segundo plano. Para obtener la autorización "Siempre", primero se debe solicitar el permiso "Al usar la app" y luego solicitar la autorización "Siempre". Para esto usaremos el metodo delegado para saber que opción eligió el usuario //
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            print("El usuario aún no ha hecho una elección con respecto a la ubicación de esta aplicación.")
+            // Cuando el usuario selecciona la opción "Preguntar la próxima vez o al compartirla" desde las configuraciones SI SE SOLICITA la autorización "Al usar la app"
+            locationManager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse:
+            print("El usuario ha otorgado autorización para usar su ubicación solo mientras usa su aplicación.")
+            // Por alguna razón el sistema NO SE SOLICITA la aturización "Siempre" cuando se selecciona "Al usar la app" desde las configuraciones y se regresa a la app.
+            locationManager.requestAlwaysAuthorization()
+        default:
+            return
+        }
     }
     
 }
