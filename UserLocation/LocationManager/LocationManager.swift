@@ -23,6 +23,9 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     //MARK: Objeto para acceder a los servicios de localización
     private let locationManager = CLLocationManager()
     
+    //MARK: Objeto para saber si se esta rastreando la ubicación del Usuario
+    private var isUpdatingLocations = Bool()
+    
     //MARK: Configurar el Location Manager Delegate
     override init() {
         super.init()
@@ -91,7 +94,6 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     
     // MARK: Obtener la ubicación actual del usuario si está disponible
     func obtenerUbicacionUsuario(precisa:Bool, propourseMessage:String, completionHandler:@escaping (_ success:Bool, _ location:CLLocationCoordinate2D?, _ error_code: Int, _ message:String?) -> Void) {
-        
         if(precisa)
         {
             Task {
@@ -150,12 +152,99 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         }
     }
     
+    // MARK: iniciar un rastreo de la ubicación del usuario, devolviendo cada cierto tiempo la ubicación del usuario
+    func iniciarRastreoUbicacionUsuario(precisa:Bool, propourseMessage:String, completionHandler:@escaping (_ success:Bool, _ location:CLLocationCoordinate2D?, _ error_code: Int, _ message:String?) -> Void){
+        if(precisa)
+        {
+            Task {
+
+                self.checkAccuracy { success, error_code in
+                    if success == false {
+                        //obtener accuracyAuthorization si no tiene fullAccuracy solicitarla al usuario
+                        completionHandler(false, nil, LocationManagerErorr.locationReducedAccuracy.rawValue, "Para hacer uso de esta funcionalidad la app requiere hacer uso de tu ubicación precisa.")//por el momento regresar esto
+                    }else{
+                        Task {
+                            var location: CLLocation?
+                            self.iniciarRastreo()
+                            do {
+                                repeat {
+                                    // Se obtiene la ubicación actual
+                                    location = try await self.currentLocations
+                                    
+                                    // Se asignan los valores correspondientes de la ubicación actual a un objeto de tipo CLLocationCoordinate2D
+                                    let locationCoordinate = CLLocationCoordinate2D(
+                                        latitude: location!.coordinate.latitude,
+                                        longitude: location!.coordinate.longitude
+                                    )
+                                    
+                                    completionHandler(true, locationCoordinate, 0, "Ubicación actual del usuario")
+                                } while self.isUpdatingLocations
+                            } catch {
+                                print("No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
+                                completionHandler(false, nil, LocationManagerErorr.obtenerUbicacion.rawValue, "No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+                }
+            }
+        }else{
+            Task {
+                var location: CLLocation?
+                self.iniciarRastreo()
+                do {
+                    repeat {
+                        // Se obtiene la ubicación actual
+                        location = try await self.currentLocations
+                        
+                        // Se asignan los valores correspondientes de la ubicación actual a un objeto de tipo CLLocationCoordinate2D
+                        let locationCoordinate = CLLocationCoordinate2D(
+                            latitude: location!.coordinate.latitude,
+                            longitude: location!.coordinate.longitude
+                        )
+                        
+                        completionHandler(true, locationCoordinate, 0, "Ubicación actual del usuario")
+                    } while self.isUpdatingLocations
+                } catch {
+                    print("No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
+                    completionHandler(false, nil, LocationManagerErorr.obtenerUbicacion.rawValue, "No se pudo obtener la ubicación del usuario: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    // MARK:  Este método debe detener el rastreo de la ubicación del usuario
+    func iniciarRastreo(){
+        locationManager.startUpdatingLocation()
+        isUpdatingLocations = true
+    }
+    
     // MARK:  Este método debe detener el rastreo de la ubicación del usuario
     func detenerRastreoUbicacionUsuario(completionHandler:@escaping (_ success:Bool, _ error_code: Int, _ message:String?) -> Void){
         Task{
             locationManager.stopUpdatingLocation()
+            isUpdatingLocations = false
             completionHandler(true, 0, "Se detuvo el rastreo de la ubicación del usuario")
             // checar si hay algún metodo delegado que nos pueda informar si ocurrión un error, ya que este es el único metodo para detener el rastreo y no regresa ninguna respuesta
+        }
+    }
+    
+    //MARK: Solicitud asíncrona para obtener las ubicaciones actuales
+    var currentLocations: CLLocation {
+        /*get async throws {
+            repeat {
+                return try await withCheckedThrowingContinuation { continuation in
+                    self.continuation = continuation
+                    // Dispara la actualización de la ubicación actual
+                    locationManager.requestLocation()
+                }
+            } while self.isUpdatingLocations
+        }*/
+        get async throws {
+            return try await withCheckedThrowingContinuation { continuation in
+                self.continuation = continuation
+                // Dispara la actualización de la ubicación actual
+                locationManager.requestLocation()
+            }
         }
     }
         
