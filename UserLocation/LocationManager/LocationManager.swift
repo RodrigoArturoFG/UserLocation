@@ -149,6 +149,15 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
             UIApplication.shared.open(url)
         }
     }
+    
+    // MARK:  Este método debe detener el rastreo de la ubicación del usuario
+    func detenerRastreoUbicacionUsuario(completionHandler:@escaping (_ success:Bool, _ error_code: Int, _ message:String?) -> Void){
+        Task{
+            locationManager.stopUpdatingLocation()
+            completionHandler(true, 0, "Se detuvo el rastreo de la ubicación del usuario")
+            // checar si hay algún metodo delegado que nos pueda informar si ocurrión un error, ya que este es el único metodo para detener el rastreo y no regresa ninguna respuesta
+        }
+    }
         
     // MARK: CLLocationManager Delegates
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

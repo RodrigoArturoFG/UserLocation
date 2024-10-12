@@ -135,6 +135,24 @@ struct ContentView: View {
             } label: {
                 Text("Configuración")
             }
+            .padding()
+            
+            Button {
+                // metodo iniciarRastreoUbicacionUsuario
+            } label: {
+                Text("Iniciar Rastreo")
+            }
+            .padding()
+            
+            Button {
+                locationManager.detenerRastreoUbicacionUsuario { success, error_code, message in
+                    // manejo de la respuesta
+                }
+            } label: {
+                Text("Detener Rastreo")
+            }
+            .padding()
+
             
         }
         .padding()
