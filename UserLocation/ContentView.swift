@@ -15,10 +15,12 @@ struct ContentView: View {
     // MARK: Variable para guardar la ubicación actual del usuario
     @State var coordinateLocation: CLLocationCoordinate2D?
     
-    // MARK: Posición de la cámara del mapa
+    // MARK: Variable para mostrar o no el Mapa en la Interfaz de Usuario
+    @State var withMap = true
+    
+    @State var mapRegion = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 43.457105, longitude: -80.508361), span: MKCoordinateSpan(latitudeDelta: 0.2, longitudeDelta: 0.2))
     //ios 17+
     //@State private var position: MapCameraPosition = .automatic
-    @State var mapRegion = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 43.457105, longitude: -80.508361), span: MKCoordinateSpan(latitudeDelta: 0.2, longitudeDelta: 0.2))
     
     var binding: Binding<MKCoordinateRegion> {
            Binding {
@@ -28,12 +30,14 @@ struct ContentView: View {
            }
        }
     
+    // MARK: Variables para la presentacion de los alerts de: Obtener Ubicación
     @State private var presentAutorizationAlert = false
     @State private var messageAutorizationAlert = "Error"
     
     @State private var presentAccuracyAlert = false
     @State private var messageAccuracyAlert = "Error"
     
+    // MARK: Variables para la presentacion de los alerts de: Iniciar Rastreo
     @State private var presentAutorizationTrackingAlert = false
     @State private var messageAutorizationTrackingAlert = "Error"
     
@@ -43,15 +47,18 @@ struct ContentView: View {
     // MARK: Body
     var body: some View {
         VStack {
-            // Mapa para visualizar la ubicación del Usuario
-            /*Map(coordinateRegion: $mapRegion, showsUserLocation: true,userTrackingMode: .constant(.follow))
-                            .edgesIgnoringSafeArea(.all)*/
-            
-            //ios 17+
-            /*Map(position: $position) {
-                UserAnnotation()
+            if(withMap)
+            {
+                // Mapa para visualizar la ubicación del Usuario
+                Map(coordinateRegion: $mapRegion, showsUserLocation: true,userTrackingMode: .constant(.none))
+                                .edgesIgnoringSafeArea(.all)
+                                .clipShape(RoundedRectangle(cornerRadius: 15))
+                //ios 17+
+                /*Map(position: $position) {
+                    UserAnnotation()
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 15))*/
             }
-            .clipShape(RoundedRectangle(cornerRadius: 15))*/
                         
             Text("Latitud: \(self.coordinateLocation?.latitude ?? 0.0)")
                 .foregroundColor(.secondary)
@@ -59,19 +66,22 @@ struct ContentView: View {
             Text("Longitud: \(self.coordinateLocation?.longitude ?? 0.0)")
                 .foregroundColor(.secondary)
 
+            // MARK: Obtener Ubicación
             Button {
-                locationManager.obtenerUbicacionUsuario(precisa: true, propourseMessage: "rastreo") { success, location, error_code, message in
+                locationManager.obtenerUbicacionUsuario(precisa: false, propourseMessage: "rastreo") { success, location, error_code, message in
                     if success {
                         presentAutorizationAlert = false
                         
                         // Actualizar la posición de la cámara del mapa para centrarla alrededor de la ubicación del usuario
                         coordinateLocation = location
                         
-                        let regionSpan = MKCoordinateSpan(latitudeDelta: 0.125, longitudeDelta: 0.125)
-                        mapRegion = MKCoordinateRegion(center: coordinateLocation!, span: regionSpan)
-                        
-                        //ios 17+
-                        //self.position = .region(MKCoordinateRegion(center: coordinateLocation!, span: regionSpan))
+                        if(withMap){
+                            let regionSpan = MKCoordinateSpan(latitudeDelta: 0.125, longitudeDelta: 0.125)
+                            mapRegion = MKCoordinateRegion(center: coordinateLocation!, span: regionSpan)
+                            
+                            //ios 17+
+                            //self.position = .region(MKCoordinateRegion(center: coordinateLocation!, span: regionSpan))
+                        }
                     }else{
                         
                         switch error_code {
@@ -79,15 +89,18 @@ struct ContentView: View {
                             locationManager.checkAuthorization { success, error_code  in
                                 if success == false {
                                     presentAutorizationAlert = true
-                                    messageAutorizationAlert = message ?? "Tu ubicación actual no se puede determinar en este momento."
+                                    messageAutorizationAlert = message ?? "Tu ubicación actual no se puede determinar en este momento. \n Puedes abrir la configuración de la app para permitir el acceso a la ubicación."
                                 }else{
                                     presentAutorizationAlert = false
-                                    //ocurrió otro error
+                                    //presentar otro error
                                 }
                             }
+                        case LocationManagerErorr.locationAuthDenied.rawValue:
+                            presentAutorizationAlert = true
+                            messageAutorizationAlert = message ?? "Tu ubicación actual no se puede determinar en este momento. \n Puedes abrir la configuración de la app para permitir el acceso a la ubicación."
                         case LocationManagerErorr.locationReducedAccuracy.rawValue:
                             presentAccuracyAlert = true
-                            messageAccuracyAlert = "Tu ubicación actual no se puede determinar en este momento."
+                            messageAccuracyAlert = message ?? "Tu ubicación actual no se puede determinar en este momento."
                         default:
                             return
                         }
@@ -113,9 +126,7 @@ struct ContentView: View {
                     Text("Cancelar")
                 }
             } message: { messageAutorizationAlert in
-                // Se puede usar el mensaje de error que viene del metodo de obtenerUbicacionUsuario de la siguiente manera: Text(messageAlert)
-                Text("Tu ubicación actual no se puede determinar en este momento."
-                     + " Puedes abrir la configuración de la app para permitir el acceso a la ubicación.")
+                Text(messageAutorizationAlert)
             }
             .alert(
                 "Precisión Reducida",
@@ -125,30 +136,112 @@ struct ContentView: View {
                 
                 Button("OK") {
                     presentAccuracyAlert = false
-                    //locationManager.abrirConfiguracion()
-                    locationManager.requestAccuracy { success, error_code in
-                        // manejo de la solicitud
+                    locationManager.requestAccuracy { success, error_code, message in
+                        // manejo de la respuesta
+                        // volver a solicitar el metodo en caso de exito ??
                     }
                 }
             } message: { messageAccuracyAlert in
-                // Se puede usar el mensaje de error que viene del metodo de obtenerUbicacionUsuario de la siguiente manera: Text(messageAlert)
-                Text("Para hacer uso de esta funcionalidad la app requiere hacer uso de tu ubicación precisa.")
+                Text(messageAccuracyAlert)
             }
             .padding()
             
+            // MARK: Obtener Ubicación (precisa = true)
             Button {
-                locationManager.iniciarRastreoUbicacionUsuario(precisa: true, propourseMessage: "rastreo") { success, location, error_code, message in
+                locationManager.obtenerUbicacionUsuario(precisa: true, propourseMessage: "rastreo") { success, location, error_code, message in
+                    if success {
+                        presentAutorizationAlert = false
+                        
+                        // Actualizar la posición de la cámara del mapa para centrarla alrededor de la ubicación del usuario
+                        coordinateLocation = location
+                        
+                        if(withMap){
+                            let regionSpan = MKCoordinateSpan(latitudeDelta: 0.125, longitudeDelta: 0.125)
+                            mapRegion = MKCoordinateRegion(center: coordinateLocation!, span: regionSpan)
+                            
+                            //ios 17+
+                            //self.position = .region(MKCoordinateRegion(center: coordinateLocation!, span: regionSpan))
+                        }
+                    }else{
+                        
+                        switch error_code {
+                        case LocationManagerErorr.obtenerUbicacion.rawValue:
+                            locationManager.checkAuthorization { success, error_code  in
+                                if success == false {
+                                    presentAutorizationAlert = true
+                                    messageAutorizationAlert = message ?? "Tu ubicación actual no se puede determinar en este momento. \n Puedes abrir la configuración de la app para permitir el acceso a la ubicación."
+                                }else{
+                                    presentAutorizationAlert = false
+                                    //presentar otro error
+                                }
+                            }
+                        case LocationManagerErorr.locationAuthDenied.rawValue:
+                            presentAutorizationAlert = true
+                            messageAutorizationAlert = message ?? "Tu ubicación actual no se puede determinar en este momento. \n Puedes abrir la configuración de la app para permitir el acceso a la ubicación."
+                        case LocationManagerErorr.locationReducedAccuracy.rawValue:
+                            presentAccuracyAlert = true
+                            messageAccuracyAlert = message ?? "Tu ubicación actual no se puede determinar en este momento."
+                        default:
+                            return
+                        }
+
+                    }
+                }
+            } label: {
+                Text("Obtener Ubicación (precisa = true)")
+            }
+            .alert(
+                "Ubicación no disponible",
+                isPresented: $presentAutorizationAlert,
+                presenting: messageAutorizationAlert // cambiar por el codigo de error
+            ) { messageAutorizationAlert in
+                
+                Button("Ir a Configuración") {
+                    locationManager.abrirConfiguracion()
+                }
+                
+                Button(role: .cancel) {
+                    // Manejo de la cancelación.
+                } label: {
+                    Text("Cancelar")
+                }
+            } message: { messageAutorizationAlert in
+                Text(messageAutorizationAlert)
+            }
+            .alert(
+                "Precisión Reducida",
+                isPresented: $presentAccuracyAlert,
+                presenting: messageAccuracyAlert // cambiar por el codigo de error
+            ) { messageAccuracyAlert in
+                
+                Button("OK") {
+                    presentAccuracyAlert = false
+                    locationManager.requestAccuracy { success, error_code, message in
+                        // manejo de la respuesta
+                        // volver a solicitar el metodo en caso de exito ??
+                    }
+                }
+            } message: { messageAccuracyAlert in
+                Text(messageAccuracyAlert)
+            }
+            .padding()
+            
+            // MARK: Iniciar Rastreo
+            Button {
+                locationManager.iniciarRastreoUbicacionUsuario(precisa: false, propourseMessage: "rastreo") { success, location, error_code, message in
                     if success {
                         presentAutorizationTrackingAlert = false
                         
                         // Actualizar la posición de la cámara del mapa para centrarla alrededor de la ubicación del usuario
                         coordinateLocation = location
                         
-                        let regionSpan = MKCoordinateSpan(latitudeDelta: 0.125, longitudeDelta: 0.125)
-                        mapRegion = MKCoordinateRegion(center: coordinateLocation!, span: regionSpan)
-                        
-                        //ios 17+
-                        //self.position = .region(MKCoordinateRegion(center: coordinateLocation!, span: regionSpan))
+                        if(withMap){
+                            let regionSpan = MKCoordinateSpan(latitudeDelta: 0.125, longitudeDelta: 0.125)
+                            mapRegion = MKCoordinateRegion(center: coordinateLocation!, span: regionSpan)
+                            
+                            //ios 17+
+                            //self.position = .region(MKCoordinateRegion(center: coordinateLocation!, span: regionSpan))
+                        }
                     }else{
                         
                         switch error_code {
@@ -190,9 +283,7 @@ struct ContentView: View {
                     Text("Cancelar")
                 }
             } message: { messageAutorizationTrackingAlert in
-                // Se puede usar el mensaje de error que viene del metodo de obtenerUbicacionUsuario de la siguiente manera: Text(messageAlert)
-                Text("Tu ubicación actual no se puede determinar en este momento."
-                     + " Puedes abrir la configuración de la app para permitir el acceso a la ubicación.")
+                Text(messageAutorizationTrackingAlert)
             }
             .alert(
                 "Precisión Reducida",
@@ -203,13 +294,91 @@ struct ContentView: View {
                 Button("OK") {
                     presentAccuracyTrackingAlert = false
                     //locationManager.abrirConfiguracion()
-                    locationManager.requestAccuracy { success, error_code in
-                        // manejo de la solicitud
+                    locationManager.requestAccuracy { success, error_code, message in
+                        // manejo de la respuesta
+                        // volver a solicitar el metodo en caso de exito ??
                     }
                 }
             } message: { messageAccuracyTrackingAlert in
-                // Se puede usar el mensaje de error que viene del metodo de obtenerUbicacionUsuario de la siguiente manera: Text(messageAlert)
-                Text("Para hacer uso de esta funcionalidad la app requiere hacer uso de tu ubicación precisa.")
+                Text(messageAccuracyTrackingAlert)
+            }
+            .padding()
+            
+            // MARK: Iniciar Rastreo (precisa = true)
+            Button {
+                locationManager.iniciarRastreoUbicacionUsuario(precisa: true, propourseMessage: "rastreo") { success, location, error_code, message in
+                    if success {
+                        presentAutorizationTrackingAlert = false
+                        
+                        // Actualizar la posición de la cámara del mapa para centrarla alrededor de la ubicación del usuario
+                        coordinateLocation = location
+                        
+                        if(withMap){
+                            let regionSpan = MKCoordinateSpan(latitudeDelta: 0.125, longitudeDelta: 0.125)
+                            mapRegion = MKCoordinateRegion(center: coordinateLocation!, span: regionSpan)
+                            
+                            //ios 17+
+                            //self.position = .region(MKCoordinateRegion(center: coordinateLocation!, span: regionSpan))
+                        }
+                    }else{
+                        
+                        switch error_code {
+                        case LocationManagerErorr.obtenerUbicacion.rawValue:
+                            locationManager.checkAuthorization { success, error_code  in
+                                if success == false {
+                                    presentAutorizationTrackingAlert = true
+                                    messageAutorizationTrackingAlert = message ?? "Tu ubicación actual no se puede determinar en este momento."
+                                }else{
+                                    presentAutorizationTrackingAlert = false
+                                    //ocurrió otro error
+                                }
+                            }
+                        case LocationManagerErorr.locationReducedAccuracy.rawValue:
+                            presentAccuracyTrackingAlert = true
+                            messageAccuracyTrackingAlert = "Tu ubicación actual no se puede determinar en este momento."
+                        default:
+                            return
+                        }
+
+                    }
+                }
+            } label: {
+                Text("Iniciar Rastreo (precisa = true)")
+            }
+            .alert(
+                "Ubicación no disponible",
+                isPresented: $presentAutorizationTrackingAlert,
+                presenting: messageAutorizationTrackingAlert // cambiar por el codigo de error
+            ) { messageAutorizationTrackingAlert in
+                
+                Button("Ir a Configuración") {
+                    locationManager.abrirConfiguracion()
+                }
+                
+                Button(role: .cancel) {
+                    // Manejo de la cancelación.
+                } label: {
+                    Text("Cancelar")
+                }
+            } message: { messageAutorizationTrackingAlert in
+                Text(messageAutorizationTrackingAlert)
+            }
+            .alert(
+                "Precisión Reducida",
+                isPresented: $presentAccuracyTrackingAlert,
+                presenting: messageAccuracyTrackingAlert // cambiar por el codigo de error
+            ) { messageAccuracyTrackingAlert in
+                
+                Button("OK") {
+                    presentAccuracyTrackingAlert = false
+                    //locationManager.abrirConfiguracion()
+                    locationManager.requestAccuracy { success, error_code, message in
+                        // manejo de la respuesta
+                        // volver a solicitar el metodo en caso de exito ??
+                    }
+                }
+            } message: { messageAccuracyTrackingAlert in
+                Text(messageAccuracyTrackingAlert)
             }
             .padding()
             
@@ -222,7 +391,12 @@ struct ContentView: View {
             }
             .padding()
 
-            
+            Button {
+                locationManager.abrirConfiguracion()
+            } label: {
+                Text("Configuración")
+            }
+            .padding()
         }
         .padding()
     }
