@@ -1,4 +1,4 @@
-# UserLocation - Swift 5 - iOS 16.2+
+# LocationManager - Swift 5 - iOS 16.2+
 # Clase capaz de gestionar la ubicación del usuario, así como gestionar los permisos necesarios.
 
 Es necesario tener los mensajes correspondientes en el "Target Properties" del proyecto, para las keys correspondientes:  
